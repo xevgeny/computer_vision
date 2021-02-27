@@ -9,7 +9,6 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(OpenCV REQUIRED)
 # tell the build to include the headers from OpenCV
 include_directories(${OpenCV_INCLUDE_DIRS})
-
 # include all cpp src files
 file(GLOB SOURCES "src/*.cpp")
 # specify the executable target to be built

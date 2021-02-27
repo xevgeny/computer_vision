@@ -1,61 +1,108 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
-#include <opencv2/face.hpp>
 
 using namespace cv;
-using namespace face;
 
-const Size target_size = Size(250, 250);
-
-int main()
+void detectFaces(CascadeClassifier &cc, const Mat &frame)
 {
+    Mat grayFrame;
+    std::vector<Rect> faces;
+
+    cvtColor(frame, grayFrame, COLOR_BGR2GRAY);
+
+    // 10% and 90% of the frame height
+    int minSize = frame.size[0] * 0.1;
+    int maxSize = frame.size[0] * 0.9;
+
+    cc.detectMultiScale(grayFrame,
+                        faces,
+                        1.1,
+                        3,
+                        0,
+                        Size(minSize, minSize),
+                        Size(maxSize, maxSize));
+
+    for (size_t i = 0; i < faces.size(); i++)
+    {
+        std::stringstream ss;
+        ss << "Face: " << i << " " << faces[i];
+        std::cout << ss.str() << std::endl;
+        putText(frame,
+                ss.str(),
+                Point(50, 100 + (i * 50)),
+                FONT_HERSHEY_SIMPLEX,
+                1,
+                CV_RGB(255, 255, 255),
+                1);
+        rectangle(frame, faces[i], CV_RGB(255, 0, 0), 1);
+    }
+}
+
+int main(int argc, char** argv)
+{
+    if (argc != 2)
+    {
+        std::cout << "unexpected number of arguments" << std::endl;
+        return -1;
+    }
+
+    VideoCapture cap(argv[1]);
+    if (!cap.isOpened())
+    {
+        std::cout << "error opening video capture: " << argv[1] << std::endl;
+        return -1;
+    }
+
+    std::cout << "FPS: " << cap.get(CAP_PROP_FPS) << std::endl;
+    std::cout << "frames: " << cap.get(CAP_PROP_FRAME_COUNT) << std::endl;
+
     // rely on $OpenCV_DIR environment variable
-    std::string face_cascade_name = samples::findFile("haarcascades/haarcascade_frontalface_default.xml");
-    std::cout << "haar cacscade path: " + face_cascade_name << std::endl;
-    // load face cascade
-    CascadeClassifier face_cascade;
-    if (!face_cascade.load(face_cascade_name))
+    CascadeClassifier faceCascade;
+    std::string faceCascadePath = samples::findFile("haarcascades/haarcascade_frontalface_alt2.xml");
+    if (!faceCascade.load(faceCascadePath))
     {
         std::cout << "failed to load face cascade\n";
         return -1;
     }
 
-    // load eigenfaces model
-    Ptr<EigenFaceRecognizer> face_recognizer = EigenFaceRecognizer::create();
-    face_recognizer->read("../eigenfaces.model");
+    int currentFrame = 0;
+    cap.set(CAP_PROP_POS_FRAMES, currentFrame);
 
-    Mat img = imread("../img/the_expanse.jpg", IMREAD_COLOR);
-
-    Mat img_gray;
-    cvtColor(img, img_gray, COLOR_BGR2GRAY);
-    equalizeHist(img_gray, img_gray);
-
-    // detect faces
-    std::vector<Rect> faces;
-    // face_cascade.detectMultiScale(img_gray, faces, 1.1, 3, 0, Size(10, 10));
-    face_cascade.detectMultiScale(img_gray, faces);
-    std::cout << "detected " << faces.size() << " faces\n";
-
-    for (size_t i = 0; i < faces.size(); i++)
+    while (true)
     {
-        std::cout << "rectangle found: " << faces[i] << std::endl;
-        rectangle(img, faces[i], Scalar(0, 0, 255), 1);
+        Mat frame;
+        cap >> frame;
 
-        // face recognition using eigenface model
-        Mat img_roi = Mat(img_gray, faces[i]);
-        Mat img_roi_resized; 
-        resize(img_roi, img_roi_resized, target_size);
-        std::cout << img_roi_resized.size << std::endl;
-        
-        int predicted_label = -1;
-        double predicted_confidence = 0.0;
-        face_recognizer->predict(img_roi_resized, predicted_label, predicted_confidence);
-        std::cout << predicted_label << ", " << predicted_confidence << std::endl;
+        if (!cap.read(frame))
+            break;
+
+        ++currentFrame;
+        // process every 5th frame
+        if (currentFrame % 5 != 0)
+            continue;
+
+        std::cout << "Frame: " << currentFrame << std::endl;
+
+        detectFaces(faceCascade, frame);
+
+        putText(frame,
+                "Frame: " + std::to_string(currentFrame),
+                Point(50, 50),
+                FONT_HERSHEY_SIMPLEX,
+                1,
+                CV_RGB(255, 255, 255),
+                1);
+
+        imshow("Video", frame);
+
+        // press ESC to exit
+        char c = (char)waitKey(5);
+        if (c == 27)
+            break;
     }
 
-    imshow("Display window", img);
-    std::cout << "press any key to exit\n";
-    waitKey(0);
+    cap.release();
+    destroyAllWindows();
 
     return 0;
 }
